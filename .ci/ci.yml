@@ -10,6 +10,9 @@ pr:
     include:
     - master
 
+variables:
+  - group: ESRP
+
 stages:
 - stage: Build
   displayName: Build PowerShell Package
@@ -135,17 +138,32 @@ stages:
       displayName: Capture environment for module code signing
       condition: succeededOrFailed()
 
-    - task: PkgESCodeSign@10
+    - pwsh: |
+        ./tools/GenerateEsrpJson.ps1 -CertificateId CP-230012 -VariableName Esrp230012 -SigningServer $(SigningServer)
+      displayName: Generate Authenticode JSON
+      condition: succeededOrFailed()
+
+    - task: SFP.build-tasks.custom-build-task-1.EsrpCodeSigning@1
       displayName: Sign module build files
-      env:
-        SYSTEM_ACCESSTOKEN: $(System.AccessToken)
       inputs:
-        signConfigXml: '$(signXmlPath)'
-        inPathRoot: '$(signSrcPath)'
-        outPathRoot: '$(signOutPath)'
-        binVersion: Production
-        binVersionOverride: ''
-      condition: and(and(succeeded(), eq(variables['Build.Reason'], 'Manual')), ne(variables['SkipSigning'], 'True'))
+        ConnectedServiceName: pwshSigning
+        FolderPath: '$(signSrcPath)'
+        UseMinimatch: false
+        signConfigType: inlineSignParams
+        inlineOperation: $(Esrp230012)
+        Pattern: '*.dll,*.psd1,*.ps1xml'
+
+    # - task: PkgESCodeSign@10
+    #   displayName: Sign module build files
+    #   env:
+    #     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+    #   inputs:
+    #     signConfigXml: '$(signXmlPath)'
+    #     inPathRoot: '$(signSrcPath)'
+    #     outPathRoot: '$(signOutPath)'
+    #     binVersion: Production
+    #     binVersionOverride: ''
+    #   condition: and(and(succeeded(), eq(variables['Build.Reason'], 'Manual')), ne(variables['SkipSigning'], 'True'))
 
     - pwsh: |
         $modulePath = Join-Path -Path $env:AGENT_TEMPDIRECTORY -ChildPath 'TempModules'
